@@ -16,7 +16,6 @@
 
 static volatile sig_atomic_t run = 1;
 static void sigterm (int sig) { run = 0; }
-
 //int number=0;
 
 struct thread_parameter {
@@ -34,6 +33,8 @@ public:
   void dr_cb (RdKafka::Message &message) {
     if (message.err())
       std::cerr << "% Message delivery failed: " << message.errstr() << std::endl;
+    
+    
     //else
         //std::cerr << number++ << std::endl;
       /*std::cerr << "% Message delivered " << (char*)message.payload() << "to topic " << message.topic_name() <<
@@ -67,7 +68,7 @@ void *increase_thread(void *data) {
     int randnum = now->randnum;
     int msg_cnt = 0;
     int msg_size = 0;
-    int msg_len = 256000;
+    int msg_len = 5242880;//256000;
     
     ExampleDeliveryReportCb ex_dr_cb;
     RdKafka::Conf *conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
@@ -76,6 +77,61 @@ void *increase_thread(void *data) {
         exit(1);
     }
     if (conf->set("dr_cb", &ex_dr_cb, errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+    }
+
+    if (conf->set("queue.buffering.max.kbytes", "2097151", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+    }
+
+    if (conf->set("queue.buffering.max.messages", "10000000", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+    }
+
+    if (conf->set("queue.buffering.max.ms", "100", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+    }
+
+    if (conf->set("linger.ms", "100", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+    }
+
+    if (conf->set("request.required.acks", "1", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+    }
+
+    /*if (conf->set("statistics.interval.ms", "1000", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+    }*/
+
+    if (conf->set("fetch.wait.max.ms", "0", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+    }
+    
+    if (conf->set("message.timeout.ms", "900000", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+    }
+
+    if (conf->set("metadata.request.timeout.ms", "900000", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+    }
+
+    /*if (conf->set("batch.num.messages", "1000000", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+    }*/
+
+    if (conf->set("message.max.bytes", "100000000", errstr) != RdKafka::Conf::CONF_OK) {
         std::cerr << errstr << std::endl;
         exit(1);
     }
@@ -93,7 +149,7 @@ void *increase_thread(void *data) {
     std::cerr << "% " << producer_id << " starts to run randomized input." << std::endl;
 
     std::string line = "producer " + producer_id + " " + random_string(msg_len);
-
+    //std::cout << line << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
 
     for (int i=0; i<randnum; i++) {
@@ -124,7 +180,7 @@ void *increase_thread(void *data) {
 
             if (err == RdKafka::ERR__QUEUE_FULL) {
                 std::cerr << "% Queue Full" << std::endl;
-                producer->poll(1000);
+                producer->poll(10*1000);
                 goto retry;
         }
 
@@ -140,24 +196,27 @@ void *increase_thread(void *data) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
+
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto start_flush = std::chrono::high_resolution_clock::now();
+
     std::cerr << "% " << producer_id << " flushes final messages..." << std::endl;
-    producer->flush(10*1000);
+    producer->flush(15*60*1000);
 
     if (producer->outq_len() > 0) {
-    //while (producer->outq_len() > 0) {    
-    //    producer->flush(5*1000);
-        std::cerr << "% " << producer->outq_len() <<
-                " message(s) in " << producer_id << " were not delivered" << std::endl;
+        //std::cerr << "% " << producer->outq_len() <<
+        //        " message(s) in " << producer_id << " were not delivered" << std::endl;
     }
-    //auto end_flush = std::chrono::high_resolution_clock::now();
+
+    auto end_flush = std::chrono::high_resolution_clock::now();
+
     std::cerr << "% " << producer_id << " is finished. (Message number: " << msg_cnt 
               << " , Bytes enqueued: " << msg_size << ")" << std::endl;
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    
     std::cerr << producer_id << " uses " << duration.count() << " milliseconds in loop." << std::endl;
-
-    //duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_flush - end);
-    //std::cerr << producer_id << " uses " << duration.count() << " milliseconds in flushing data." << std::endl;
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_flush - start_flush);
+    std::cerr << producer_id << " uses " << duration.count() << " milliseconds in flushing data." << std::endl;
 
     delete producer;
     pthread_exit(NULL);

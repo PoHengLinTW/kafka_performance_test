@@ -147,7 +147,7 @@ void msg_consume(RdKafka::Message* message, void* opaque) {
         std::cout << "Key: " << *message->key() << std::endl;
       }
       if (verbosity >= 1) {
-          std::cout << num++ << std::endl;
+          std::cout << num++ << "len: " << message->len() << std::endl;
         //printf("%.*s\n",
         //       static_cast<int>(message->len()),
         //       static_cast<const char *>(message->payload()));
@@ -355,6 +355,26 @@ int main (int argc, char **argv) {
 
   conf->set("default_topic_conf", tconf, errstr);
   delete tconf;
+
+  if (conf->set("fetch.message.max.bytes", "100000000", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+  }
+
+  if (conf->set("max.partition.fetch.bytes", "100000000", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+  }
+
+  if (conf->set("session.timeout.ms", "500000", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+  }
+
+  if (conf->set("socket.timeout.ms", "300000", errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << errstr << std::endl;
+        exit(1);
+  }
 
   signal(SIGINT, sigterm);
   signal(SIGTERM, sigterm);
